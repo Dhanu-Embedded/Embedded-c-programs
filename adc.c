@@ -1,9 +1,5 @@
-// PIC16F877A Configuration Bit Settings
-
-// 'C' source line config statements
-
 // CONFIG
-#pragma config FOSC = EXTRC     // Oscillator Selection bits (RC oscillator)
+#pragma config FOSC = HS        // Oscillator Selection bits (HS oscillator)
 #pragma config WDTE = OFF       // Watchdog Timer Enable bit (WDT disabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
 #pragma config BOREN = ON       // Brown-out Reset Enable bit (BOR enabled)
@@ -15,32 +11,46 @@
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
 #include <xc.h>
-#define _XTAL_FREQ  20000000
-#define LED RB0
-unsigned int adc;
-void main(void) 
+#define _XTAL_FREQ 20000000
+#define rs RD0
+
+void uart_tx(unsigned char data)
 {
-    TRISB = 0X00;
-    ADCON0 = 0B00000001;
+    TXREG = data;
+    while(TXIF == 0);
+}
+void main(void)
+{
+    unsigned int adc;
+
+    TRISA0 = 1;
+    TRISC6 = 0;
+    TRISD0 = 0;
+
+    ADCON0 = 0B10000001;       //ADC ON
     ADCON1 = 0B10000000;
-    LED = 0;
+
+    TXSTA = 0B00100110;        //UART TRANSMITTER SETTING
+    RCSTA = 0B10000000;
+    SPBRG = 129;
     while(1)
     {
-        GO_nDONE = 1;
-        while(GO_nDONE == 1);
-        
-        adc = (ADRESH << 8) | ADRESL;
-        
-        if(adc > 1000)
-        {
-            LED = 1;
-        }
-        else 
-        {
-            LED = 0;
-        }
-            
+        ADCON0bits.GO = 1;
+        while(ADCON0bits.GO == 1);
+
+        adc = ((ADRESH << 8) | ADRESL);
+
+        rs = 1;                 //RS transmitter mode
+
+        uart_tx(0xFF);          //Special starting byte
+        uart_tx((adc / 1000) + '0');
+        uart_tx(((adc / 100) % 10) + '0');
+        uart_tx(((adc / 10) % 10) + '0');
+        uart_tx((adc % 10) + '0');
+
+        while(TRMT == 0);
+        rs = 0;                 //RECEIVER MODE
+
+        __delay_ms(50);
     }
-    
-    return;
 }
