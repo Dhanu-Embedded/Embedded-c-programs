@@ -14,85 +14,97 @@
 
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
+
+
 #include <xc.h>
 #define _XTAL_FREQ 20000000
 #define RS RB0
 #define RW RB1
 #define EN RB2
-unsigned int adc;
-void lcd_init();
-void write(unsigned char data, unsigned char rs);
+void lcd_cmd(unsigned char cmd)
+{
+    PORTD = cmd;
+    RS = 0;
+    RW = 0;
+    EN = 1;
+    __delay_ms(2);
+    EN = 0;
+}
+void lcd_data(unsigned char data)
+{
+    PORTD = data;
+    RS = 1;
+    RW = 0;
+    EN = 1;
+    __delay_ms(2);
+    EN = 0;
+}
+void lcd_init(void)
+{
+    lcd_cmd(0x38);
+    lcd_cmd(0x0C);
+    lcd_cmd(0x01);
+    lcd_cmd(0x06);
+    lcd_cmd(0x80);
+}
 void main(void)
 {
+    unsigned int adc;
+    unsigned char hundreds, tens, ones;
+    TRISA = 0x01;
     TRISB = 0x00;
     TRISD = 0x00;
-    ADCON0 = 0B00000001;
-    ADCON1 = 0B10000000;
+
+    ADCON0 = 0x41;
+    ADCON1 = 0x8E;
 
     lcd_init();
-
-    ADIF = 0;
-    ADIE = 1;
-    PEIE = 1;
-    GIE = 1;
     while(1)
     {
         GO_nDONE = 1;
-        __delay_ms(10);
-        write(0x80, 0);
-        write(' ', 1);
-        write(' ', 1);
-        write(' ', 1);
-        write(' ', 1);
-        write(0x80, 0);
-        if(adc >= 1000)
-        {
-            write((adc / 1000) + '0', 1);
-            write(((adc / 100) % 10) + '0', 1);
-            write(((adc / 10) % 10) + '0', 1);
-            write((adc % 10) + '0', 1);
-        }
-        else if(adc >= 100)
-        {
-            write((adc / 100) + '0', 1);
-            write(((adc / 10) % 10) + '0', 1);
-            write((adc % 10) + '0', 1);
-        }
-        else if(adc >= 10)
-        {
-            write((adc / 10) + '0', 1);
-            write((adc % 10) + '0', 1);
-        }
-        else
-        {
-            write(adc + '0', 1);
-        }
-        __delay_ms(1000);
-    }
-    return;
-}
-void __interrupt() timer(void)
-{
-    if(ADIF == 1)
-    {
-        adc = (ADRESH << 8) | ADRESL;
+        while(GO_nDONE);
+        adc = ((unsigned int)ADRESH << 8) | ADRESL;
+        hundreds = adc / 100;
+        tens = (adc / 10) % 10;
+        ones = adc % 10;
+        lcd_cmd(0x80);
+        lcd_data('A');
+        lcd_data('D');       //lcd display//
+        lcd_data('C');
+        lcd_data('=');
 
-        ADIF = 0;
+        lcd_data(hundreds + '0');
+        lcd_data(tens + '0');       
+        lcd_data(ones + '0');
+        EEADR = 0x50;
+        EEDATA = hundreds + '0';
+        EEPGD = 0;
+        WREN = 1;
+        EECON2 = 0x55;
+        EECON2 = 0xAA;
+        WR = 1;
+        while(WR);
+        WREN = 0;
+        
+        EEADR = 0x51;
+        EEDATA = tens + '0';
+        EEPGD = 0;
+        WREN = 1;
+        EECON2 = 0x55;
+        EECON2 = 0xAA;
+        WR = 1;
+        while(WR);
+        
+        WREN = 0;
+        EEADR = 0x52;
+        EEDATA = ones + '0';
+        EEPGD = 0;
+        WREN = 1;
+        EECON2 = 0x55;
+        EECON2 = 0xAA;
+        WR = 1;
+        while(WR);
+        WREN = 0;
+        __delay_ms(500);
     }
-}
-void lcd_init()
-{
-    write(0x06, 0);
-    write(0x0E, 0);
-    write(0x1C, 0);
-    write(0x80, 0);
-}
-void write(unsigned char data, unsigned char rs)
-{
-    PORTD = data;
-    RS = rs;
-    RW = 0;
-    EN = 1;
-    __delay_ms(20);
-    EN = 0;
 }
